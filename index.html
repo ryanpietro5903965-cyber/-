@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b0b0b">
+  <meta name="description" content="§">
+  <title>§</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="noise" aria-hidden="true"></div>
+  <main class="shell">
+    <header class="topbar">
+      <div class="sigil" aria-label="símbolo">§</div>
+      <div class="status">
+        <span id="stageLabel">00/50</span>
+        <span class="dot">·</span>
+        <span id="statusText">aguardando</span>
+      </div>
+    </header>
+    <div class="progress-wrap" aria-hidden="true"><div id="progress" class="progress"></div></div>
+    <section id="screen" class="screen"></section>
+    <button id="helpBtn" class="help" type="button" aria-label="abrir ajuda">§</button>
+    <footer class="footer">
+      <span>não precisa ter pressa.</span>
+      <span id="tinyState">§§</span>
+    </footer>
+  </main>
+  <script src="stages.js"></script>
+  <script>
+    (() => {
+      "use strict";
+      const TOTAL = 50;
+      const STORAGE_KEY = "segredo_luciana_50_progress";
+      const screen = document.getElementById("screen");
+      const stageLabel = document.getElementById("stageLabel");
+      const statusText = document.getElementById("statusText");
+      const progress = document.getElementById("progress");
+      const helpBtn = document.getElementById("helpBtn");
+      const tinyState = document.getElementById("tinyState");
+      let current = 1;
+      let helpState = 0;
+
+      function normalize(value) {
+        return String(value)
+          .trim()
+          .toLowerCase()
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .replace(/\s+/g, " ");
+      }
+      function escapeHtml(value) {
+        return String(value)
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#039;");
+      }
+      function saveStage(stage) { localStorage.setItem(STORAGE_KEY, String(stage)); }
+      function readStage() {
+        const saved = Number(localStorage.getItem(STORAGE_KEY));
+        return Number.isInteger(saved) && saved >= 1 && saved <= TOTAL ? saved : 1;
+      }
+      function getStage(id) { return id === 50 ? FINAL_STAGE : STAGES.find(s => s.id === id); }
+
+      function render() {
+        helpState = 0;
+        helpBtn.classList.remove("used", "danger");
+        tinyState.textContent = current === 1 ? "§" : current < 50 ? "§§" : "§§§";
+        stageLabel.textContent = String(current).padStart(2, "0") + "/50";
+        progress.style.width = ((current - 1) / (TOTAL - 1)) * 100 + "%";
+        statusText.textContent = current === 1 ? "entrada" : current === 50 ? "fim" : "em andamento";
+
+        if (current === 1) {
+          screen.innerHTML = `
+            <div class="intro reveal">
+              <div class="eyebrow">§ arquivo encontrado</div>
+              <h1>Bem, aqui um bglh pra você passar raiva</h1>
+              <p class="subtle">não tem explicação. ainda.</p>
+              <button id="startBtn" class="main-btn" type="button"><span>começar</span><span class="arrow">→</span></button>
+            </div>`;
+          document.getElementById("startBtn").addEventListener("click", () => {
+            current = 2;
+            saveStage(current);
+            render();
+          });
+          return;
+        }
+        if (current === 50) { renderFinal(); return; }
+        const stage = getStage(current);
+        if (!stage) { screen.innerHTML = `<div class="error-box">erro de etapa.</div>`; return; }
+
+        screen.innerHTML = `
+          <div class="stage reveal">
+            <div class="stage-meta"><span>§ ${String(stage.id).padStart(2, "0")}</span><span>${escapeHtml(stage.title)}</span></div>
+            <div class="prompt">${escapeHtml(stage.prompt)}</div>
+            <form id="answerForm" class="answer-form" autocomplete="off">
+              <label for="answerInput">resposta</label>
+              <div class="input-row">
+                <input id="answerInput" inputmode="text" spellcheck="false" maxlength="80" aria-label="Sua resposta">
+                <button class="main-btn compact" type="submit">abrir →</button>
+              </div>
+              <div id="feedback" class="feedback" aria-live="polite"></div>
+            </form>
+          </div>`;
+
+        const form = document.getElementById("answerForm");
+        const input = document.getElementById("answerInput");
+        const feedback = document.getElementById("feedback");
+        form.addEventListener("submit", (event) => {
+          event.preventDefault();
+          const guess = normalize(input.value);
+          const accepted = stage.accepted.map(normalize);
+          if (accepted.includes(guess)) {
+            statusText.textContent = current === 49 ? "última" : "certo";
+            feedback.className = "feedback success";
+            feedback.innerHTML = `abriu.<br><span>§ ${current < 49 ? "próxima etapa disponível." : "a última porta está aí."}</span>`;
+            setTimeout(() => {
+              current += 1;
+              saveStage(current);
+              render();
+            }, 550);
+          } else {
+            statusText.textContent = "quase";
+            feedback.className = "feedback error";
+            feedback.textContent = "não abriu.";
+            input.select();
+          }
+        });
+        input.focus();
+      }
+
+      function renderFinal() {
+        screen.innerHTML = `
+          <div class="final reveal">
+            <div class="eyebrow">§ 50/50</div>
+            <h2>fim.</h2>
+            <div class="final-message">${escapeHtml(FINAL_STAGE.message)}</div>
+            <button id="resetBtn" class="ghost-btn" type="button">recomeçar</button>
+          </div>`;
+        document.getElementById("resetBtn").addEventListener("click", () => {
+          localStorage.removeItem(STORAGE_KEY);
+          current = 1;
+          render();
+        });
+      }
+
+      helpBtn.addEventListener("click", () => {
+        if (current === 1 || current === 50) return;
+        const stage = getStage(current);
+        const feedback = document.getElementById("feedback");
+        if (!feedback) return;
+        helpState += 1;
+        if (helpState === 1) {
+          feedback.className = "feedback hint";
+          feedback.innerHTML = `<span>§ dica:</span> ${escapeHtml(stage.hint)}`;
+          helpBtn.classList.add("used");
+        } else {
+          feedback.className = "feedback reveal-answer";
+          feedback.innerHTML = `<span>§ resposta:</span> ${escapeHtml(stage.answer)}`;
+          helpBtn.classList.add("danger");
+        }
+      });
+
+      current = readStage();
+      render();
+    })();
+  </script>
+</body>
+</html>
